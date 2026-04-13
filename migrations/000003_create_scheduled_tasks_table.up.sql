@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    cron_expression TEXT NOT NULL,
+    next_run TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);

@@ -21,6 +21,21 @@ type taskDTO struct {
 	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
+type createScheduledRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	PeriodType  string `json:"period_type,omitempty"`
+	Value       string `json:"value,omitempty"`
+}
+
+type scheduledTaskDTO struct {
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	NextRun     time.Time `json:"next_run"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 func newTaskDTO(task *taskdomain.Task) taskDTO {
 	return taskDTO{
 		ID:          task.ID,

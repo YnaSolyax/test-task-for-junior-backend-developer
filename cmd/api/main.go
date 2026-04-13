@@ -12,6 +12,7 @@ import (
 
 	infrastructurepostgres "example.com/taskservice/internal/infrastructure/postgres"
 	postgresrepo "example.com/taskservice/internal/repository/postgres"
+	"example.com/taskservice/internal/scheduler"
 	transporthttp "example.com/taskservice/internal/transport/http"
 	swaggerdocs "example.com/taskservice/internal/transport/http/docs"
 	httphandlers "example.com/taskservice/internal/transport/http/handlers"
@@ -37,7 +38,21 @@ func main() {
 
 	taskRepo := postgresrepo.New(pool)
 	taskUsecase := task.NewService(taskRepo)
-	taskHandler := httphandlers.NewTaskHandler(taskUsecase)
+	taskScheduler := scheduler.NewScheduler(taskUsecase, logger)
+	schedules, err := taskRepo.ListScheduled(context.Background())
+	if err != nil {
+		logger.Error("failed to load initial schedules", "error", err)
+	} else {
+		for _, s := range schedules {
+			if err := taskScheduler.AddTask(context.Background(), s); err != nil {
+				logger.Error("failed to restore schedule", "id", s.ID, "error", err)
+			}
+		}
+		logger.Info("restored schedules from db", "count", len(schedules))
+	}
+
+	taskScheduler.Start()
+	taskHandler := httphandlers.NewTaskHandler(taskUsecase, taskScheduler)
 	docsHandler := swaggerdocs.NewHandler()
 	router := transporthttp.NewRouter(taskHandler, docsHandler)
 

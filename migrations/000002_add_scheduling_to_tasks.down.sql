@@ -1,0 +1,2 @@
+ALTER TABLE tasks DROP COLUMN IF EXISTS scheduled_id;
+ALTER TABLE tasks DROP COLUMN IF EXISTS deadline;

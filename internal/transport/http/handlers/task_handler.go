@@ -3,21 +3,60 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
 
 	taskdomain "example.com/taskservice/internal/domain/task"
+	"example.com/taskservice/internal/scheduler"
 	taskusecase "example.com/taskservice/internal/usecase/task"
 )
 
 type TaskHandler struct {
-	usecase taskusecase.Usecase
+	usecase   taskusecase.Usecase
+	scheduler *scheduler.Scheduler
 }
 
-func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
-	return &TaskHandler{usecase: usecase}
+func NewTaskHandler(u taskusecase.Usecase, s *scheduler.Scheduler) *TaskHandler {
+	return &TaskHandler{
+		usecase:   u,
+		scheduler: s,
+	}
+}
+
+func (h *TaskHandler) CreateScheduled(w http.ResponseWriter, r *http.Request) {
+	var req createScheduledRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	created, err := h.usecase.CreateScheduled(r.Context(), taskusecase.CreateScheduledInput{
+		Title:          req.Title,
+		Description:    req.Description,
+		PeriodType:     req.PeriodType,
+		Value:          req.Value,
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	if err := h.scheduler.AddTask(r.Context(), *created); err != nil {
+		slog.Debug("add task schedule", err)
+	}
+
+	response := scheduledTaskDTO{
+		ID:          created.ID,
+		Title:       created.Title,
+		Description: created.Description,
+		NextRun:     created.NextRun,
+		CreatedAt:   created.CreatedAt,
+	}
+
+	writeJSON(w, http.StatusCreated, response)
 }
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {

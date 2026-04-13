@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/robfig/cron/v3 v3.0.1
 )
 
 require (

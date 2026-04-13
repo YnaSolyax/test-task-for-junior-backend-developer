@@ -7,6 +7,7 @@ import (
 	"time"
 
 	taskdomain "example.com/taskservice/internal/domain/task"
+	"github.com/robfig/cron/v3"
 )
 
 type Service struct {
@@ -42,6 +43,60 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	}
 
 	return created, nil
+}
+
+func (s *Service) CreateScheduled(ctx context.Context, input CreateScheduledInput) (*taskdomain.ScheduledTask, error) {
+	//hardcode в связи с нехваткой времени
+	cronExpr := input.CronExpression
+	if input.PeriodType != "" {
+		switch input.PeriodType {
+		case "daily":
+			cronExpr = fmt.Sprintf("0 0 12 */%s * *", input.Value)
+		case "monthly":
+			cronExpr = fmt.Sprintf("0 0 12 %s * *", input.Value)
+		case "even":
+			cronExpr = "0 0 12 2-30/2 * *"
+		case "odd":
+			cronExpr = "0 0 12 1-31/2 * *"
+		default:
+			return nil, fmt.Errorf("unknown period type: %s", input.PeriodType)
+		}
+	}
+
+	if cronExpr == "" {
+		return nil, fmt.Errorf("either cron_expression or period_type with value is required")
+	}
+
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	sched, err := parser.Parse(cronExpr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid cron expression: %w", err)
+	}
+	model := &taskdomain.ScheduledTask{
+		Title:          input.Title,
+		Description:    input.Description,
+		CronExpression: cronExpr,
+		NextRun:        sched.Next(s.now()),
+		CreatedAt:      s.now(),
+	}
+
+	return s.repo.CreateScheduled(ctx, model)
+}
+
+func (s *Service) SpawnTaskFromSchedule(ctx context.Context, scheduleID int64, title, desc string) error {
+	_ = s.repo.MarkOverdueByScheduledID(ctx, scheduleID)
+	model := &taskdomain.Task{
+		Title:       title,
+		Description: desc,
+		Status:      taskdomain.StatusNew,
+		ScheduledID: &scheduleID,
+	}
+	now := s.now()
+	model.CreatedAt = now
+	model.UpdatedAt = now
+
+	_, err := s.repo.CreateWithSchedule(ctx, model)
+	return err
 }
 
 func (s *Service) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
